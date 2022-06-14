@@ -7,8 +7,7 @@ from flask_migrate import Migrate
 from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
-from admin import setup_admin
-from models import db, User
+from models import db, Task
 #from models import Person
 
 app = Flask(__name__)
@@ -18,26 +17,51 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 MIGRATE = Migrate(app, db)
 db.init_app(app)
 CORS(app)
-setup_admin(app)
 
-# Handle/serialize errors like a JSON object
-@app.errorhandler(APIException)
-def handle_invalid_usage(error):
-    return jsonify(error.to_dict()), error.status_code
+todos = [
+    { "label": "My first task", "done": False }
+]
 
-# generate sitemap with all your endpoints
-@app.route('/')
-def sitemap():
-    return generate_sitemap(app)
+@app.route('/todos', methods=['GET'])
+def get_task():
+    tarea = Task.query.all()
+    all_task = list(map(lambda todos: todos.serialize(), tarea))
+    return jsonify(all_task)
 
-@app.route('/user', methods=['GET'])
-def handle_hello():
+@app.route('/todos', methods=['POST'])
+def crear():
+    body = request.get_json()
+    print(body)
+    tarea = Task(text=body["label"], done=False)
+    db.session.add(tarea)
+    db.session.commit()
+    return jsonify(tarea.serialize())
 
-    response_body = {
-        "msg": "Hello, this is your GET /user response "
-    }
+@app.route('/todos/<int:task_id>', methods=['PUT','GET','DELETE'])
+def handle_task(task_id):
+    if request.method == 'PUT':
+        if task is None:
+           raise APIException("Tarea no encontrada", 404) 
+        body = request.get_json()
+        if not ("done" is body):
+            raise APIException("Parametro done no encontrado", 404) 
+        task.done = body["done"]
+        db.session.commit()
+        return jsonify(task.serialize())
 
-    return jsonify(response_body), 200
+    elif request.method == 'GET':
+        task = Task.query.get(task_id)
+        if task is None:
+           raise APIException("Tarea no encontrada", 404) 
+        return jsonify(task.serialize())
+
+    elif request.method == 'DELETE':
+        task = Task.query.get(task_id)
+        if task is None:
+           raise APIException("Tarea no encontrada", 404)
+        db.session.delete(task)
+        db.session.commit()
+        return jsonify(task.serialize())
 
 # this only runs if `$ python src/main.py` is executed
 if __name__ == '__main__':
